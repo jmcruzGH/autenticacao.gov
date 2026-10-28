@@ -1900,7 +1900,7 @@
     </message>
     <message>
         <source>STR_LOAD_ENCRYPTED_PDF_ERROR_MSG2</source>
-        <translation>” is an unsupported or encrypted PDF file. The PDF signature does not support encrypted PDF files.</translation>
+        <translation>” is protected: it needs a password to open, or its author does not allow signatures to be added.</translation>
     </message>
     <message>
         <source>STR_FILE_UPLOAD_FAIL</source>

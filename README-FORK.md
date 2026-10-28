@@ -21,6 +21,9 @@ application, go to <https://www.autenticacao.gov.pt>.
   card fails during a file read, the read is retried, and a persistent
   failure is reported as a card read error instead of the misleading
   error 257.
+- Branch `pdf-encrypted-sign`: encrypted PDFs that open without a password
+  can be signed (RC4, AES-128, AES-256), unless their permissions forbid
+  adding annotations.
 - Signing with Chave Móvel Digital does not work in this build: it needs
   credentials that AMA does not publish.
 

@@ -33,6 +33,96 @@
 #include "goo/gmem.h"
 #include "Decrypt.h"
 #include "Error.h"
+#include <openssl/evp.h>
+
+//------------------------------------------------------------------------
+// ISO 32000-2 Algorithm 2.B: the hash used by AES-256 security handler
+// revision 6 (revision 5, Adobe's earlier extension, used plain SHA-256).
+// <udata> is the 48-byte /U string when checking the owner password,
+// NULL otherwise. The result is the first 32 bytes of the final hash.
+//------------------------------------------------------------------------
+static GBool r6Hash(const Guchar *pwd, int pwdLen, const Guchar *salt,
+                    const Guchar *udata, Guchar *out) {
+  Guchar k[64];
+  unsigned int kLen = 32;
+  int udataLen = udata ? 48 : 0;
+  GBool ok = gFalse;
+  EVP_MD_CTX *md = EVP_MD_CTX_new();
+  EVP_CIPHER_CTX *aes = EVP_CIPHER_CTX_new();
+  int k1Len = 64 * (pwdLen + 64 + udataLen);
+  Guchar *k1 = (Guchar *)gmalloc(k1Len);
+  Guchar *e = (Guchar *)gmalloc(k1Len);
+
+  if (!md || !aes) goto done;
+
+  // K = SHA-256(password || salt || udata)
+  if (!EVP_DigestInit_ex(md, EVP_sha256(), NULL) ||
+      !EVP_DigestUpdate(md, pwd, pwdLen) ||
+      !EVP_DigestUpdate(md, salt, 8) ||
+      (udataLen && !EVP_DigestUpdate(md, udata, udataLen)) ||
+      !EVP_DigestFinal_ex(md, k, &kLen))
+    goto done;
+
+  for (int round = 0; ; ++round) {
+    // K1 = (password || K || udata) repeated 64 times
+    int seqLen = pwdLen + kLen + udataLen;
+    for (int i = 0; i < 64; ++i) {
+      Guchar *p = k1 + i * seqLen;
+      memcpy(p, pwd, pwdLen);
+      memcpy(p + pwdLen, k, kLen);
+      if (udataLen)
+        memcpy(p + pwdLen + kLen, udata, udataLen);
+    }
+    int len = 64 * seqLen, outl = 0, outl2 = 0;
+
+    // E = AES-128-CBC(key = K[0..15], iv = K[16..31], K1), no padding
+    if (!EVP_EncryptInit_ex(aes, EVP_aes_128_cbc(), NULL, k, k + 16) ||
+        !EVP_CIPHER_CTX_set_padding(aes, 0) ||
+        !EVP_EncryptUpdate(aes, e, &outl, k1, len) ||
+        !EVP_EncryptFinal_ex(aes, e + outl, &outl2))
+      goto done;
+
+    // The first 16 bytes of E as a number, modulo 3, pick the next hash
+    int sum = 0;
+    for (int i = 0; i < 16; ++i)
+      sum += e[i];
+    const EVP_MD *next = (sum % 3 == 0) ? EVP_sha256()
+                       : (sum % 3 == 1) ? EVP_sha384() : EVP_sha512();
+    if (!EVP_DigestInit_ex(md, next, NULL) ||
+        !EVP_DigestUpdate(md, e, len) ||
+        !EVP_DigestFinal_ex(md, k, &kLen))
+      goto done;
+
+    if (round >= 63 && e[len - 1] <= round - 31)
+      break;
+  }
+  memcpy(out, k, 32);
+  ok = gTrue;
+
+done:
+  gfree(k1);
+  gfree(e);
+  if (md) EVP_MD_CTX_free(md);
+  if (aes) EVP_CIPHER_CTX_free(aes);
+  return ok;
+}
+
+// Revision 5 hashes with plain SHA-256; revision 6 with Algorithm 2.B.
+static void sha256(Guchar *msg, int msgLen, Guchar *hash);
+static void aesv3Hash(int encRevision, const Guchar *pwd, int pwdLen,
+                      const Guchar *salt, const Guchar *udata, Guchar *out) {
+  if (encRevision == 6) {
+    if (!r6Hash(pwd, pwdLen, salt, udata, out))
+      memset(out, 0, 32);
+    return;
+  }
+  Guchar buf[127 + 56];
+  memcpy(buf, pwd, pwdLen);
+  memcpy(buf + pwdLen, salt, 8);
+  if (udata)
+    memcpy(buf + pwdLen + 8, udata, 48);
+  sha256(buf, pwdLen + 8 + (udata ? 48 : 0), out);
+}
 
 static void aesKeyExpansion(DecryptAESState *s,
 			    Guchar *objKey, int objKeyLen);
@@ -70,7 +160,7 @@ GBool Decrypt::makeFileKey(int encVersion, int encRevision, int keyLength,
 
   *ownerPasswordOk = gFalse;
 
-  if (encRevision == 5) {
+  if (encRevision == 5 || encRevision == 6) {
 
     // check the owner password
     if (ownerPassword) {
@@ -79,17 +169,15 @@ GBool Decrypt::makeFileKey(int encVersion, int encRevision, int keyLength,
       if (len > 127) {
 	len = 127;
       }
-      memcpy(test, ownerPassword->getCString(), len);
-      memcpy(test + len, ownerKey->getCString() + 32, 8);
-      memcpy(test + len + 8, userKey->getCString(), 48);
-      sha256(test, len + 56, test);
+      aesv3Hash(encRevision, (Guchar *)ownerPassword->getCString(), len,
+                (Guchar *)ownerKey->getCString() + 32,
+                (Guchar *)userKey->getCString(), test);
       if (!memcmp(test, ownerKey->getCString(), 32)) {
 
 	// compute the file key from the owner password
-	memcpy(test, ownerPassword->getCString(), len);
-	memcpy(test + len, ownerKey->getCString() + 40, 8);
-	memcpy(test + len + 8, userKey->getCString(), 48);
-	sha256(test, len + 56, test);
+	aesv3Hash(encRevision, (Guchar *)ownerPassword->getCString(), len,
+	          (Guchar *)ownerKey->getCString() + 40,
+	          (Guchar *)userKey->getCString(), test);
 	aes256KeyExpansion(&state, test, 32);
 	for (i = 0; i < 16; ++i) {
 	  state.cbc[i] = 0;
@@ -105,22 +193,25 @@ GBool Decrypt::makeFileKey(int encVersion, int encRevision, int keyLength,
       }
     }
 
-    // check the user password
+    // check the user password (NULL means the empty password, as for the
+    // older revisions; this is what lets files that open without a
+    // password be opened without one)
+    GooString emptyPassword;
+    if (!userPassword)
+      userPassword = &emptyPassword;
     if (userPassword) {
       //~ this is supposed to convert the password to UTF-8 using "SASLprep"
       len = userPassword->getLength();
       if (len > 127) {
 	len = 127;
       }
-      memcpy(test, userPassword->getCString(), len);
-      memcpy(test + len, userKey->getCString() + 32, 8);
-      sha256(test, len + 8, test);
+      aesv3Hash(encRevision, (Guchar *)userPassword->getCString(), len,
+                (Guchar *)userKey->getCString() + 32, NULL, test);
       if (!memcmp(test, userKey->getCString(), 32)) {
 
 	// compute the file key from the user password
-	memcpy(test, userPassword->getCString(), len);
-	memcpy(test + len, userKey->getCString() + 40, 8);
-	sha256(test, len + 8, test);
+	aesv3Hash(encRevision, (Guchar *)userPassword->getCString(), len,
+	          (Guchar *)userKey->getCString() + 40, NULL, test);
 	aes256KeyExpansion(&state, test, 32);
 	for (i = 0; i < 16; ++i) {
 	  state.cbc[i] = 0;

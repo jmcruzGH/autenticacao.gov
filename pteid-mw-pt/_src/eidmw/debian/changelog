@@ -1,3 +1,19 @@
+pteid-mw-jmc (3.16.0+jmc4) noble; urgency=medium
+
+  * Sign encrypted PDFs that open without a password (RC4 40/128-bit,
+    AES-128, AES-256 revisions 5 and 6): the objects appended by the
+    signature, and by LTV data, are written encrypted with the document's
+    key; the signature value and the trailer stay in clear, as ISO 32000
+    requires.
+  * Open AES-256 revision 6 (ISO 32000-2) PDFs, written by current
+    software, which the bundled PDF library could not decrypt.
+  * Refuse to sign when the document's permissions forbid adding
+    annotations (a new signature field is one), and say so in the
+    message shown for protected files.
+  * Fix MemOutStream::put(), which could overflow its buffer.
+
+ -- JoseMCruz <jmcruz@fe.up.pt>  Wed, 28 Oct 2026 17:00:00 +0000
+
 pteid-mw-jmc (3.16.0+jmc3) noble; urgency=medium
 
   * Retry card file reads after a reader-card communication error

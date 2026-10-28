@@ -349,6 +349,12 @@ MemOutStream::~MemOutStream()
 }
 
 void MemOutStream::put(char c) {
+	// Grow the buffer like printf() does: callers may write binary data
+	// (e.g. encrypted streams) beyond the initial size estimate
+	if (used >= buffer_size) {
+		buffer = (unsigned char *)grealloc(buffer, buffer_size * 2);
+		buffer_size *= 2;
+	}
 	*(buffer+used) = c;
 	used++;
 }

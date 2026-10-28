@@ -356,8 +356,12 @@ int PDFSignature::getPageCount() {
 		return -3;
 	}
 
-	if (m_doc->isEncrypted()) {
-		MWLOG(LEV_WARN, MOD_APL, "%s - Protected PDF: unsupported at the moment", __FUNCTION__);
+	// Encrypted PDFs that open without a password can be signed (the new
+	// objects are written encrypted), unless their permissions forbid adding
+	// annotations, which a new signature field is (ISO 32000-1, table 22).
+	if (m_doc->isEncrypted() && !m_doc->okToAddNotes()) {
+		MWLOG(LEV_WARN, MOD_APL, "%s - Encrypted PDF whose permissions don't allow adding a signature",
+			  __FUNCTION__);
 		return -2;
 	}
 	return m_doc->getNumPages();
@@ -548,8 +552,8 @@ int PDFSignature::signSingleFile(const char *location, const char *reason, const
 		throw CMWEXCEPTION(EIDMW_PDF_INVALID_ERROR);
 	}
 
-	if (doc->isEncrypted()) {
-		MWLOG(LEV_ERROR, MOD_APL, "Trying to sign encrypted PDF: not supported yet.");
+	if (doc->isEncrypted() && !doc->okToAddNotes()) {
+		MWLOG(LEV_ERROR, MOD_APL, "Trying to sign encrypted PDF whose permissions don't allow adding a signature.");
 		delete outputName;
 		throw CMWEXCEPTION(EIDMW_PDF_UNSUPPORTED_ERROR);
 	}

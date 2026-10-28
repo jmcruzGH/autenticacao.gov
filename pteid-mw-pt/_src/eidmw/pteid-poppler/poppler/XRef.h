@@ -106,6 +106,11 @@ public:
   GBool okToAssemble(GBool ignoreOwnerPW = gFalse);
   int getPermFlags() { return permFlags; }
 
+  // Encryption parameters, needed to write encrypted incremental updates
+  CryptAlgorithm getEncAlgorithm() { return encAlgorithm; }
+  int getKeyLength() { return keyLength; }
+  const Guchar *getFileKey() { return fileKey; }
+
   // Get catalog object.
   Object *getCatalog(Object *obj) { return fetch(rootNum, rootGen, obj); }
 
