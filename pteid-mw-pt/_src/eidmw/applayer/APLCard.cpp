@@ -104,6 +104,13 @@ unsigned long APL_Card::readFile(const char *csPath, CByteArray &oData, unsigned
 		if (e.GetError() == EIDMW_ERR_INCOMPATIBLE_READER)
 			throw e;
 
+		// A failed transmission between reader and card must not be reported as an
+		// empty file: callers would then parse missing data (e.g. the photo) and fail
+		// later with a misleading "parameter out of range" (0xe1d00101). Let the
+		// caller retry the whole file read (see APL_CardFile::LoadData).
+		if (e.GetError() == EIDMW_ERR_NOT_TRANSACTED || e.GetError() == EIDMW_ERR_CARD_COMM)
+			throw e;
+
 		return 0;
 	} catch (...) {
 		MWLOG(LEV_ERROR, MOD_APL, "Error trying to read file csPath: %s, uloffset: %lu, ulmaxlen: %lu", csPath,

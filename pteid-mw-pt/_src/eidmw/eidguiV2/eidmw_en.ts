@@ -2330,7 +2330,7 @@
     </message>
     <message>
         <source>STR_POPUP_CARD_ACCESS_ERROR</source>
-        <translation>A problem has occurred while trying to read card. Please, try again.</translation>
+        <translation>A problem has occurred while trying to read the card. Please remove the card, insert it again and try again.</translation>
     </message>
     <message>
         <source>STR_POPUP_CARD_READ</source>
@@ -2549,7 +2549,7 @@
     </message>
     <message>
         <source>STR_POPUP_CARD_ACCESS_ERROR</source>
-        <translation>A problem has occurred while trying to read card. Please, try again.</translation>
+        <translation>A problem has occurred while trying to read the card. Please remove the card, insert it again and try again.</translation>
     </message>
     <message>
         <source>STR_PIN_NEW_CONFIRM</source>

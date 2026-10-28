@@ -2328,7 +2328,7 @@
     </message>
     <message>
         <source>STR_POPUP_CARD_ACCESS_ERROR</source>
-        <translation>Ocorreu um erro ao tentar ler o cartão. Tente novamente por favor.</translation>
+        <translation>Ocorreu um erro ao tentar ler o cartão. Retire o cartão, volte a inseri-lo e tente novamente, por favor.</translation>
     </message>
     <message>
         <source>STR_POPUP_CARD_READ</source>
@@ -2547,7 +2547,7 @@ Este número de 6 digitos está impresso no seu cartão no canto inferior direit
     </message>
     <message>
         <source>STR_POPUP_CARD_ACCESS_ERROR</source>
-        <translation>Ocorreu um erro ao tentar ler o cartão. Tente novamente por favor.</translation>
+        <translation>Ocorreu um erro ao tentar ler o cartão. Retire o cartão, volte a inseri-lo e tente novamente, por favor.</translation>
     </message>
     <message>
         <source>STR_PIN_NEW_CONFIRM</source>
