@@ -1,3 +1,18 @@
+pteid-mw-jmc (3.16.0+jmc3) noble; urgency=medium
+
+  * Retry card file reads after a reader-card communication error
+    (pcsc-lite SCARD_E_NOT_TRANSACTED / SCARD_E_COMM_DATA_LOST): reset the
+    card, select the application again and re-read the whole file, up to
+    3 attempts (contact cards only). Upstream's own retry in
+    CCard::SendAPDU is never reached because CPCSC::Transmit throws first.
+  * When the read still fails, report the communication error instead of
+    returning an empty file, which made the identity page fail with the
+    misleading error 257 (EIDMW_ERR_PARAM_RANGE) while decoding the photo.
+  * The GUI shows the card read error popup for communication errors,
+    now asking to remove and reinsert the card.
+
+ -- JoseMCruz <jmcruz@fe.up.pt>  Wed, 28 Oct 2026 16:00:00 +0000
+
 pteid-mw-jmc (3.16.0+jmc2) noble; urgency=medium
 
   * Replace the proprietary Myriad Pro font of the PDF signature seal with

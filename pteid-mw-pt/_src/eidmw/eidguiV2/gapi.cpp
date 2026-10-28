@@ -657,6 +657,13 @@ void GAPI::emitErrorSignal(const char *caller_function, long errorCode, int inde
 		emit signalPdfSignFail(FileNoSpace, index);
 	} else if (errorCode == EIDMW_ERR_FILE_READ_ONLY) {
 		emit signalPdfSignFail(FileReadOnly, index);
+	} else if (errorCode == EIDMW_ERR_CARD_COMM || errorCode == EIDMW_ERR_NOT_TRANSACTED) {
+		// Reader and card stopped communicating (already retried in the applayer):
+		// show the card read error, which asks to remove and reinsert the card,
+		// instead of a bare error number.
+		PTEID_LOG(PTEID_LOG_LEVEL_ERROR, "eidgui", "Card communication error in %s! Error code: %08lx",
+				  caller_function, errorCode);
+		emit signalCardAccessError(CardUnknownError);
 	} else {
 		PTEID_LOG(PTEID_LOG_LEVEL_ERROR, "eidgui",
 				  "Generic eidlib exception in %s! Error code (see strings in eidErrors.h): %08lx", caller_function,

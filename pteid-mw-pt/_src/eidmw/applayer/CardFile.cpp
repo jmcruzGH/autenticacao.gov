@@ -45,8 +45,47 @@
 #include "APLConfig.h"
 
 #include "Log.h"
+#include "Reader.h"
+#include "Thread.h"
 
 namespace eIDMW {
+
+/* Communication between the reader and the card can fail in the middle of a long
+ * file read (typically the photo, the largest file), especially with built-in
+ * laptop readers. pcsc-lite reports this as SCARD_E_NOT_TRANSACTED or
+ * SCARD_E_COMM_DATA_LOST. Upstream retries this once in CCard::SendAPDU, but
+ * that code is never reached because CPCSC::Transmit throws first; and a retry
+ * of only the last command could not work anyway, because recovering resets the
+ * card and loses the selected file. So the whole file read is retried here. */
+static const int CARDFILE_READ_ATTEMPTS = 3;
+
+static bool isCardCommError(unsigned long err) {
+	return err == EIDMW_ERR_NOT_TRANSACTED || err == EIDMW_ERR_CARD_COMM;
+}
+
+/* Reset the card connection and forget the selected application, so that the
+ * next selectApplication() really selects it again. Contactless cards are not
+ * recovered: a reset would drop their PACE session. */
+static bool recoverCardForRetry(APL_Card *card) {
+	CReader *reader = card->getCalReader();
+	if (reader == NULL || reader->isCardContactless())
+		return false;
+
+	card->CalLock();
+	try {
+		reader->Recover();
+		reader->ResetApplication();
+	} catch (CMWException &e) {
+		card->CalUnlock();
+		MWLOG(LEV_ERROR, MOD_APL, "LoadData: card recovery failed - Error : 0x%lx", (unsigned long)e.GetError());
+		return false;
+	} catch (...) {
+		card->CalUnlock();
+		return false;
+	}
+	card->CalUnlock();
+	return true;
+}
 
 /*****************************************************************************************
 ------------------------------------ APL_CardFile ---------------------------------------
@@ -87,34 +126,50 @@ tCardFileStatus APL_CardFile::LoadData(bool bForceReload) {
 	CAutoMutex autoMutex(&m_Mutex); // We lock for only one instantiation
 
 	if (m_card != NULL && (m_status == CARDFILESTATUS_UNREAD || bForceReload)) {
-		try {
-			APL_SmartCard *card = dynamic_cast<APL_SmartCard *>(m_card);
-			card->selectApplication(m_appId);
-			// Fill the m_data with the content of the file
-			// MWLOG(LEV_INFO, MOD_APL, L"LoadData: Ask for file %ls", wsPath);	//TODO replace by DEBUG
-			ReadFile();
-			// MWLOG(LEV_INFO, MOD_APL, L"LoadData: Read file %ls ok", wsPath);	//TODO replace by DEBUG
-		} catch (CMWException &e) {
-			unsigned long err = e.GetError();
-			if (err == EIDMW_ERR_FILE_NOT_FOUND) {
-				MWLOG(LEV_INFO, MOD_APL, "LoadData: File %s not found", m_path.c_str());
-				m_status = CARDFILESTATUS_ERROR_NOFILE;
-				return m_status;
-			}
-			if (err == EIDMW_ERR_CARD_COMM) {
-				MWLOG(LEV_WARN, MOD_APL, "LoadData: Could not read file : %s - Error : 0x%x", m_path.c_str(),
+		for (int attempt = 1;; attempt++) {
+			try {
+				APL_SmartCard *card = dynamic_cast<APL_SmartCard *>(m_card);
+				card->selectApplication(m_appId);
+				// Fill the m_data with the content of the file
+				// MWLOG(LEV_INFO, MOD_APL, L"LoadData: Ask for file %ls", wsPath);	//TODO replace by DEBUG
+				ReadFile();
+				// MWLOG(LEV_INFO, MOD_APL, L"LoadData: Read file %ls ok", wsPath);	//TODO replace by DEBUG
+				if (attempt > 1)
+					MWLOG(LEV_WARN, MOD_APL, "LoadData: file %s read on attempt %d", m_path.c_str(), attempt);
+				break;
+			} catch (CMWException &e) {
+				unsigned long err = e.GetError();
+				if (isCardCommError(err) && attempt < CARDFILE_READ_ATTEMPTS) {
+					MWLOG(LEV_WARN, MOD_APL,
+						  "LoadData: communication error reading file %s (attempt %d) - Error : 0x%lx; retrying",
+						  m_path.c_str(), attempt, err);
+					CThread::SleepMillisecs(200 * attempt);
+					if (recoverCardForRetry(m_card))
+						continue;
+				}
+				if (err == EIDMW_ERR_FILE_NOT_FOUND) {
+					MWLOG(LEV_INFO, MOD_APL, "LoadData: File %s not found", m_path.c_str());
+					m_status = CARDFILESTATUS_ERROR_NOFILE;
+					return m_status;
+				}
+				if (isCardCommError(err)) {
+					// Upstream returned "no file" for EIDMW_ERR_CARD_COMM, which made callers
+					// parse missing data and fail later with a misleading error. Report the
+					// communication failure itself, so the GUI can say what happened.
+					MWLOG(LEV_ERROR, MOD_APL,
+						  "LoadData: could not read file %s after %d attempts - communication error : 0x%lx",
+						  m_path.c_str(), attempt, (unsigned long)e.GetError());
+					throw CMWEXCEPTION(EIDMW_ERR_CARD_COMM);
+				}
+				if (err == EIDMW_ERR_INCOMPATIBLE_READER) {
+					MWLOG(LEV_ERROR, MOD_APL, "LoadData: Reader is incompatible with card.");
+					throw e;
+				}
+
+				MWLOG(LEV_ERROR, MOD_APL, "LoadData: Could not read file : %s - Error : 0x%x", m_path.c_str(),
 					  e.GetError());
-				m_status = CARDFILESTATUS_ERROR_NOFILE;
-				return m_status;
-			}
-			if (err == EIDMW_ERR_INCOMPATIBLE_READER) {
-				MWLOG(LEV_ERROR, MOD_APL, "LoadData: Reader is incompatible with card.");
 				throw e;
 			}
-
-			MWLOG(LEV_ERROR, MOD_APL, "LoadData: Could not read file : %s - Error : 0x%x", m_path.c_str(),
-				  e.GetError());
-			throw e;
 		}
 	}
 
