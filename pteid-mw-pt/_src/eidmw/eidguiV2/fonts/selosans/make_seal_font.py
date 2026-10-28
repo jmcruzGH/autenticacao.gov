@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Build the PDF signature-seal font (SeloSans) from Adobe Source Sans 3.
+
+The visible signature seal is written with WinAnsi (Windows-1252) encoding, so
+only those characters are needed. This script:
+
+  1. subsets Source Sans 3 Regular, Italic and Bold to Windows-1252;
+  2. renames the result "SeloSans" (the SIL OFL 1.1 does not allow a
+     modified version to use the Reserved Font Name "Source");
+  3. writes the three .otf files next to this script (installed with the
+     application and used by the seal preview);
+  4. regenerates the C++ sources that embed the fonts in signed PDFs:
+       pteid-poppler/poppler/Myriad-Font.cc / Myriad-Font.h
+       common/MyriadFontGlyphWidths.cpp
+     (the file and identifier names are kept from upstream to make rebasing
+     on new upstream releases easier).
+
+Usage (from the eidmw directory):
+  pip install fonttools
+  python3 eidguiV2/fonts/selosans/make_seal_font.py /path/to/source-sans/OTF
+"""
+import os
+import sys
+import zlib
+
+from fontTools.subset import Options, Subsetter
+from fontTools.ttLib import TTFont
+
+FAMILY = "SeloSans"
+STYLES = [
+    # (enum suffix, source file, style name, PDF flags)
+    ("REGULAR", "SourceSans3-Regular.otf", "Regular", 32),
+    ("BOLD", "SourceSans3-Bold.otf", "Bold", 262176),
+    ("ITALIC", "SourceSans3-It.otf", "Italic", 96),
+]
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+EIDMW = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
+
+
+def winansi_unicodes():
+    """Unicode code point for each WinAnsi code 0..255 (None if undefined)."""
+    table = []
+    for code in range(256):
+        if code < 32 or code == 127:
+            table.append(None)
+            continue
+        try:
+            table.append(ord(bytes([code]).decode("cp1252")))
+        except UnicodeDecodeError:
+            table.append(None)
+    return table
+
+
+def rename(font, style):
+    ps_name = f"{FAMILY}-{style}"
+    full = f"{FAMILY} {style}"
+    name = font["name"]
+    # Drop every name that could carry the Reserved Font Name.
+    keep = {0, 7, 8, 9, 11, 12, 13, 14}
+    name.names = [n for n in name.names if n.nameID in keep]
+    for plat, enc, lang in ((3, 1, 0x409), (1, 0, 0)):
+        name.setName(FAMILY, 1, plat, enc, lang)
+        name.setName(style, 2, plat, enc, lang)
+        name.setName(f"{ps_name};subset of Source Sans 3", 3, plat, enc, lang)
+        name.setName(full, 4, plat, enc, lang)
+        name.setName("Subset of Source Sans 3 (Adobe), renamed per SIL OFL 1.1", 5, plat, enc, lang)
+        name.setName(ps_name, 6, plat, enc, lang)
+    cff = font["CFF "].cff
+    cff.fontNames = [ps_name]
+    top = cff.topDictIndex[0]
+    top.FullName = full
+    top.FamilyName = FAMILY
+    return ps_name
+
+
+def c_bytes(data, per_line=14):
+    lines = []
+    for i in range(0, len(data), per_line):
+        lines.append("  " + ",".join(f"0x{b:02X}" for b in data[i:i + per_line]))
+    return ",\n".join(lines)
+
+
+def int_rows(values, per_line=22):
+    return ",\n".join(
+        "\t" + ", ".join(str(v) for v in values[i:i + per_line])
+        for i in range(0, len(values), per_line)
+    )
+
+
+def build(src_dir):
+    unicodes = winansi_unicodes()
+    wanted = [u for u in unicodes if u is not None]
+    results = []
+    for enum, src, style, flags in STYLES:
+        font = TTFont(os.path.join(src_dir, src))
+        opts = Options()
+        opts.layout_features = []
+        opts.name_IDs = ["*"]
+        opts.name_languages = ["*"]
+        opts.notdef_outline = True
+        opts.recalc_bounds = True
+        sub = Subsetter(opts)
+        sub.populate(unicodes=wanted)
+        sub.subset(font)
+        ps_name = rename(font, style)
+
+        out_otf = os.path.join(HERE, f"{ps_name}.otf")
+        font.save(out_otf)
+        raw = open(out_otf, "rb").read()
+        font = TTFont(out_otf)
+
+        upm = font["head"].unitsPerEm
+        scale = 1000.0 / upm
+        cmap = font.getBestCmap()
+        hmtx = font["hmtx"]
+        widths = []
+        for u in unicodes:
+            g = cmap.get(u) if u is not None else None
+            widths.append(int(round(hmtx[g][0] * scale)) if g else 0)
+
+        head, os2 = font["head"], font["OS/2"]
+        results.append({
+            "enum": enum,
+            "ps_name": ps_name,
+            "raw_len": len(raw),
+            "data": zlib.compress(raw, 9),
+            "widths": widths,
+            "descent": int(round(os2.sTypoDescender * scale)),
+            "ascent": int(round(os2.sTypoAscender * scale)),
+            "cap": int(round(os2.sCapHeight * scale)),
+            "stemv": 140 if enum == "BOLD" else 85,
+            "bbox": [int(round(v * scale)) for v in
+                     (head.xMin, head.yMin, head.xMax, head.yMax)],
+            "flags": flags,
+            "italic": int(round(font["post"].italicAngle)),
+        })
+        print(f"{out_otf}: {len(raw)} bytes, {len(results[-1]['data'])} compressed")
+    return results
+
+
+def write_sources(results):
+    by = {r["enum"]: r for r in results}
+    note = ("/* Generated by eidguiV2/fonts/selosans/make_seal_font.py.\n"
+            " * SeloSans: a WinAnsi subset of Adobe Source Sans 3, renamed as the\n"
+            " * SIL Open Font License 1.1 requires (see eidguiV2/fonts/selosans/OFL.txt).\n"
+            " * It replaces the proprietary Myriad Pro; identifiers keep the upstream\n"
+            " * \"myriad\" names to ease rebasing. Do not edit by hand. */\n")
+
+    # Myriad-Font.cc: keep the hand-written code after the data arrays,
+    # replacing only names and widths.
+    cc_path = os.path.join(EIDMW, "pteid-poppler", "poppler", "Myriad-Font.cc")
+    old = open(cc_path).read()
+    code = old[old.index("Object createFontDescriptor("):]
+    code = code[:code.index("int MYRIAD_REGULAR_WIDTHS[]")] + "@WIDTHS@" + \
+        code[code.index("Object createMyriadDict("):]
+    for enum, old_name in (("REGULAR", "MyriadPro-Regular"),
+                           ("ITALIC", "MyriadPro-It"),
+                           ("BOLD", "MyriadPro-Bold")):
+        code = code.replace(f'"{old_name}"', f'"{by[enum]["ps_name"]}"')
+    widths = "".join(
+        f"int MYRIAD_{e}_WIDTHS[] =\n{{\n{int_rows(by[e]['widths'])}\n}};\n\n"
+        for e in ("REGULAR", "BOLD", "ITALIC"))
+    code = code.replace("@WIDTHS@", widths)
+    arrays = "".join(
+        f"unsigned char MyriadFonts::myriad_{e.lower()}_compressed[] =\n{{\n"
+        f"{c_bytes(by[e]['data'])}\n}};\n\n"
+        for e in ("REGULAR", "BOLD", "ITALIC"))
+    with open(cc_path, "w") as f:
+        f.write('#include "Myriad-Font.h"\n\n' + note + "\n" + arrays + code)
+
+    # Myriad-Font.h: lengths and descriptors.
+    h_path = os.path.join(EIDMW, "pteid-poppler", "poppler", "Myriad-Font.h")
+    h = open(h_path).read()
+    start = h.index("const int MYRIAD_REGULAR_LEN")
+    end = h.index("#endif", start)
+    parts = []
+    for e in ("REGULAR", "BOLD", "ITALIC"):
+        r = by[e]
+        parts.append(f"const int MYRIAD_{e}_LEN = {len(r['data'])};\n"
+                     f"const int MYRIAD_{e}_UNCOMPRESSED_LEN = {r['raw_len']};\n")
+    for e in ("REGULAR", "BOLD", "ITALIC"):
+        r = by[e]
+        b = ", ".join(str(v) for v in r["bbox"])
+        parts.append(
+            f"const FontDescriptor myriad_{e.lower()}_font_desc =\n{{\n"
+            f"\t{r['descent']},\n\t{r['stemv']},\n\t{r['cap']},\n"
+            f"\t\"{r['ps_name']}\",\n\t{{{b}}},\n\t{r['flags']},\n"
+            f"\t{r['ascent']},\n\t{r['italic']},\n"
+            f"\tMYRIAD_{e}_LEN,\n\tMYRIAD_{e}_UNCOMPRESSED_LEN,\n"
+            f"\tMyriadFonts::myriad_{e.lower()}_compressed\n}};\n")
+    with open(h_path, "w") as f:
+        f.write(h[:start] + note + "\n" + "\n".join(parts) + "\n" + h[end:])
+
+    # common/MyriadFontGlyphWidths.cpp: widths used to wrap the seal text.
+    w_path = os.path.join(EIDMW, "common", "MyriadFontGlyphWidths.cpp")
+    w = open(w_path).read()
+    start = w.index("int MYRIAD_REGULAR_WIDTHS[]")
+    end = w.index("unsigned int getWidth(")
+    tables = "".join(
+        f"int MYRIAD_{e}_WIDTHS[] = {{\n{int_rows(by[e]['widths'])}}};\n\n"
+        for e in ("REGULAR", "BOLD", "ITALIC"))
+    with open(w_path, "w") as f:
+        f.write(w[:start] + note + tables + w[end:])
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        sys.exit(__doc__)
+    write_sources(build(sys.argv[1]))

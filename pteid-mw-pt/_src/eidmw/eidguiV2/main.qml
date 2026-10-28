@@ -34,7 +34,7 @@ Window {
     minimumWidth: Constants.SCREEN_MINIMUM_WIDTH
     minimumHeight: Constants.SCREEN_MINIMUM_HEIGHT
 
-    title: "Autenticação.Gov"
+    title: "Autenticacao.JoseMCruz"
 
     FontLoader {
         id: lato;

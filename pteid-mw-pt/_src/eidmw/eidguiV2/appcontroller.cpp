@@ -575,7 +575,7 @@ QString AppController::getFontFile(QString font) {
 	if (font.compare("lato") == 0) {
 		fontFile.append("Lato-Regular.ttf");
 	} else if (font.compare("myriad") == 0) {
-		fontFile.append("MyriadPro-Regular.otf");
+		fontFile.append("SeloSans-Regular.otf");
 	} else {
 		return "";
 	}
@@ -690,7 +690,7 @@ QString timestampString() {
 void AppController::zipLogs() {
 	/*
 	 *   create a zip on Desktop with log files
-	 *   with name of type: Autenticacao.gov_logs_TIMESTAMP.zip
+	 *   with name of type: Autenticacao.JoseMCruz_logs_TIMESTAMP.zip
 	 */
 	std::string logDir;
 #ifdef WIN32
@@ -704,7 +704,7 @@ void AppController::zipLogs() {
 	int status = 0;
 	zip_t *pZip = NULL;
 
-	QString zipFileName = QString("/Autenticacao.gov_logs_%1.zip").arg(timestampString());
+	QString zipFileName = QString("/Autenticacao.JoseMCruz_logs_%1.zip").arg(timestampString());
 	QString outputDir(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation));
 	QString outputFile(outputDir + zipFileName);
 

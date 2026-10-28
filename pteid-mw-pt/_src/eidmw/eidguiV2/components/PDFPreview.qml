@@ -88,7 +88,7 @@ Rectangle {
 
     FontLoader {
         id: myriad
-        name: "MyriadPro"
+        name: "SeloSans"
         source: controler.getFontFile("myriad")
     }
 

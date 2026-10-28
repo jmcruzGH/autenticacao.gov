@@ -13,6 +13,10 @@ application, go to <https://www.autenticacao.gov.pt>.
 - Branch `ubuntu-packaging`: Debian packaging fixed for Ubuntu 24.04. It
   builds an unofficial package named `pteid-mw-jmc`, which can be installed
   alongside the official Flatpak.
+- Branch `my-ui`: the application is called "Autenticacao.JoseMCruz", and
+  the proprietary Myriad Pro font of the PDF signature seal is replaced by
+  SeloSans, a subset of Adobe Source Sans 3 under the SIL OFL 1.1
+  (`pteid-mw-pt/_src/eidmw/eidguiV2/fonts/selosans/`).
 - Signing with Chave Móvel Digital does not work in this build: it needs
   credentials that AMA does not publish.
 

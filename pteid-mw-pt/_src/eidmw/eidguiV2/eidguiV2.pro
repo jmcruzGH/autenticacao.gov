@@ -107,8 +107,10 @@ translations.files += eidmw_en.qm \
                 eidmw_nl.qm
 
 fonts.path = $${INSTALL_DIR_BIN}/../share/pteid-mw/fonts
-fonts.files += fonts/myriad/MyriadPro-Regular.otf
-fonts.files += fonts/myriad/MyriadPro-Bold.otf
+fonts.files += fonts/selosans/SeloSans-Regular.otf
+fonts.files += fonts/selosans/SeloSans-Bold.otf
+fonts.files += fonts/selosans/SeloSans-Italic.otf
+fonts.files += fonts/selosans/OFL.txt
 fonts.files += fonts/lato/Lato-Regular.ttf
 
 INSTALLS += target translations fonts

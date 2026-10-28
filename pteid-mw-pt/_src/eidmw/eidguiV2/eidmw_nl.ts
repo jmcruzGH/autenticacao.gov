@@ -51,7 +51,7 @@
     </message>
     <message>
         <source>STR_CERTIFICATE_ERROR</source>
-        <translation>Este erro pode ter resultado da interferência na rede, por um software externo à aplicação Autenticação.Gov. </translation>
+        <translation>Este erro pode ter resultado da interferência na rede, por um software externo à aplicação Autenticacao.JoseMCruz. </translation>
     </message>
     <message>
         <source>STR_CERTIFICATE_ERROR_READ_ADDRESS</source>
@@ -1602,7 +1602,7 @@
     <message>
         <source>STR_HELP_ACCESSIBILITY_SUB_TITLE</source>
         <oldsource>STR_HELP_DOC_SUB_TITLE</oldsource>
-        <translation>A aplicação Autenticação.Gov permite a navegação através do teclado e suporta a utilização de um leitor de ecrã.</translation>
+        <translation>A aplicação Autenticacao.JoseMCruz permite a navegação através do teclado e suporta a utilização de um leitor de ecrã.</translation>
     </message>
     <message>
         <source>STR_HELP_ACCESSIBILITY_MENUS</source>
@@ -1654,7 +1654,7 @@
     </message>
     <message>
         <source>STR_HELP_DOC_SUB_TITLE</source>
-        <translation>A aplicação Autenticação.Gov permite ao cidadão tirar partido das funcionalidades eletrónicas do seu Cartão de Cidadão e da sua Chave Móvel Digital.</translation>
+        <translation>A aplicação Autenticacao.JoseMCruz permite ao cidadão tirar partido das funcionalidades eletrónicas do seu Cartão de Cidadão e da sua Chave Móvel Digital.</translation>
     </message>
     <message>
         <source>STR_HELP_DOC_TOPIC</source>
@@ -2765,7 +2765,7 @@ Este número de 6 digitos está impresso no seu cartão no canto inferior direit
     </message>
     <message>
         <source>STR_SET_TELEMETRY_TITLE</source>
-        <translation>Permite que a aplicação Autenticação.gov recolha e comunique informação sobre o seu uso?</translation>
+        <translation>Permite que a aplicação Autenticacao.JoseMCruz recolha e comunique informação sobre o seu uso?</translation>
     </message>
     <message>
         <source>STR_SET_TELEMETRY_TEXT</source>
@@ -2775,9 +2775,9 @@ Este número de 6 digitos está impresso no seu cartão no canto inferior direit
         <source>STR_TELEMETRY_TERMS</source>
         <translation>Os dados recolhidos são:
  • Sistema operativo e versão
- • Versão da aplicação Autenticação.gov
+ • Versão da aplicação Autenticacao.JoseMCruz
  • Eventos de utilização, como: iniciar aplicação, assinaturas digitais, imprimir dados do cartão
- • Identificador único gerado aleatoriamente para poder diferenciar instalações da aplicação Autenticação.gov
+ • Identificador único gerado aleatoriamente para poder diferenciar instalações da aplicação Autenticacao.JoseMCruz
  • IP público da ligação de internet que é usado para enviar os dados recolhidos</translation>
     </message>
     <message>

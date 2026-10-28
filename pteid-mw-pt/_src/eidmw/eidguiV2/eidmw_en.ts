@@ -56,7 +56,7 @@
     </message>
     <message>
         <source>STR_CERTIFICATE_ERROR</source>
-        <translation>This error may be the result of a network interference, caused by a software unrelated to Autenticação.Gov. </translation>
+        <translation>This error may be the result of a network interference, caused by a software unrelated to Autenticacao.JoseMCruz. </translation>
     </message>
     <message>
         <source>STR_CERTIFICATE_ERROR_READ_ADDRESS</source>
@@ -1604,7 +1604,7 @@
     <message>
         <source>STR_HELP_ACCESSIBILITY_SUB_TITLE</source>
         <oldsource>STR_HELP_DOC_SUB_TITLE</oldsource>
-        <translation>The Autenticação.Gov application allows keyboard navigation and supports the use of a screen reader.</translation>
+        <translation>The Autenticacao.JoseMCruz application allows keyboard navigation and supports the use of a screen reader.</translation>
     </message>
     <message>
         <source>STR_HELP_ACCESSIBILITY_MENUS</source>
@@ -1656,7 +1656,7 @@
     </message>
     <message>
         <source>STR_HELP_DOC_SUB_TITLE</source>
-        <translation>The Autenticação.Gov application allows citizens to take advantage of the electronic features of their Citizen Card and the Chave Móvel Digital.</translation>
+        <translation>The Autenticacao.JoseMCruz application allows citizens to take advantage of the electronic features of their Citizen Card and the Chave Móvel Digital.</translation>
     </message>
     <message>
         <source>STR_HELP_DOC_TOPIC</source>
@@ -2767,7 +2767,7 @@
     </message>
     <message>
         <source>STR_SET_TELEMETRY_TITLE</source>
-        <translation>Do you allow Autenticação.gov to collect and report information about your usage?</translation>
+        <translation>Do you allow Autenticacao.JoseMCruz to collect and report information about your usage?</translation>
     </message>
     <message>
         <source>STR_SET_TELEMETRY_TEXT</source>
@@ -2777,9 +2777,9 @@
         <source>STR_TELEMETRY_TERMS</source>
         <translation>The collected data items are:
  • Operating system and its version
- • Authentication.gov application version
+ • Autenticacao.JoseMCruz application version
  • Usage events, such as: application start, digital signature, or print card data
- • Randomly generated unique identifier to be able to differentiate Authentication.gov application installations
+ • Randomly generated unique identifier to be able to differentiate Autenticacao.JoseMCruz application installations
  • Public IP of the internet connection that is used to send the collected data</translation>
     </message>
     <message>
