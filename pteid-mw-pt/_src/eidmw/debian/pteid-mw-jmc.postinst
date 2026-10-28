@@ -31,5 +31,7 @@ then
 fi
 
 
+#DEBHELPER#
+
 exit 0
 

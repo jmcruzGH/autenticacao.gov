@@ -1,0 +1,13 @@
+[Desktop Entry]
+Comment=Portuguese Citizen Card - unofficial build based on Autenticação.gov
+Comment[pt]=Cartão de Cidadão - versão não oficial baseada no Autenticação.gov
+Exec=env QT_QPA_PLATFORMTHEME=gtk3 eidguiV2
+GenericName=Portuguese eID Data
+GenericName[pt]=Dados do Cartão de Cidadão
+Icon=pteid-scalable
+Name=Cartão de Cidadão (build local)
+Name[pt]=Cartão de Cidadão (build local)
+StartupNotify=true
+Terminal=false
+Type=Application
+Categories=Office;

@@ -1,9 +1,9 @@
-Source: pteid-mw
+Source: pteid-mw-jmc
 Section: utils
-Priority: extra
-Maintainer: Agência para a Modernização Administrativa, IP <ama@ama.pt>
-Build-Depends: debhelper (>= 7.0.50~),
-               pkg-config, 
+Priority: optional
+Maintainer: JoseMCruz <jmcruz@fe.up.pt>
+Build-Depends: debhelper-compat (= 13),
+               pkg-config,
                libpcsclite-dev,
                libpoppler-qt5-dev,
                libzip-dev,
@@ -15,39 +15,45 @@ Build-Depends: debhelper (>= 7.0.50~),
                qtbase5-private-dev,
                qtdeclarative5-dev,
                qtquickcontrols2-5-dev,
-               qml-module-qtquick-controls2,	
+               qml-module-qtquick-controls2,
                libssl-dev,
                libxerces-c-dev,
                libxml-security-c-dev,
                swig,
-               libcurl4-openssl-dev
-Standards-Version: 3.9.1
-Homepage: https://www.autenticacao.gov.pt/cc-software
+               libcurl4-openssl-dev,
+               libcjson-dev,
+               libeac-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/jmcruzGH/autenticacao.gov
 
-Package: pteid-mw
-Conflicts: cartaodecidadao
+Package: pteid-mw-jmc
 Architecture: any
-#TODO: dependency missing for pkexec command: policykit-1 on Ubuntu 20 which is replaced by pkexec on Ubuntu 22
-#On most desktops it is included with the DE but we should add it anyway
+Conflicts: pteid-mw, cartaodecidadao
+Replaces: pteid-mw, cartaodecidadao
 Depends: pcscd,
-	qml-module-qt-labs-folderlistmodel,
-	qml-module-qt-labs-settings,
-	qml-module-qt-labs-platform,
-	qml-module-qtgraphicaleffects,
-	qml-module-qtquick-controls,
-	qml-module-qtquick-controls2,
-	qml-module-qtquick-dialogs,
-	qml-module-qtquick-layouts,
-	qml-module-qtquick-templates2,
-	qml-module-qtquick-window2,
-	qml-module-qtquick2,
-	qt5-gtk-platformtheme,
-	fonts-lato,
-        ${misc:Depends},
-        ${shlibs:Depends}
-Description: Autenticação.Gov
- The Autenticação.Gov package provides a utility application (eidguiV2), a set of
- libraries and a PKCS#11 module to use the Portuguese Identity Card
- (Cartão de Cidadão) and Chave Móvel Digital in order to authenticate securely 
- in certain websites and sign documents.
-
+         qml-module-qt-labs-folderlistmodel,
+         qml-module-qt-labs-settings,
+         qml-module-qt-labs-platform,
+         qml-module-qtgraphicaleffects,
+         qml-module-qtquick-controls,
+         qml-module-qtquick-controls2,
+         qml-module-qtquick-dialogs,
+         qml-module-qtquick-layouts,
+         qml-module-qtquick-templates2,
+         qml-module-qtquick-window2,
+         qml-module-qtquick2,
+         qt5-gtk-platformtheme,
+         fonts-lato,
+         pkexec,
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: Portuguese Citizen Card middleware and application (unofficial build)
+ Unofficial, independently built and modified version of the Portuguese
+ Citizen Card (Cartao de Cidadao) middleware, derived from the source code
+ published by AMA - Agencia para a Modernizacao Administrativa, I.P.
+ (https://github.com/amagovpt/autenticacao.gov) under the EUPL v1.2.
+ .
+ It provides a utility application (eidguiV2), a set of libraries and a
+ PKCS#11 module to read the card, authenticate and sign documents.
+ .
+ This package is not produced, endorsed or supported by AMA.

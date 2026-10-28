@@ -8,25 +8,24 @@ export JAVA_HOME=/usr/lib/jvm/default-java
 export CFLAGS
 export CXXFLAGS
 
+# The top directory also has a CMakeLists.txt (meant for a hand-built
+# dependency tree); force debhelper to use the qmake build instead.
 %:
-	dh $@ --parallel
+	dh $@ --buildsystem=qmake
 
 override_dh_usrlocal:
 override_dh_makeshlibs:
-#override_dh_shlibdeps:
-        
-clean:
+
+override_dh_auto_clean:
 	rm -f build
-	find eidlibJava/ -name '*.class' -exec rm -f {} \; 
+	find eidlibJava/ -name '*.class' -exec rm -f {} \;
 	rm -rf bin/*.qm
 	rm -rf config.status
 	dh_auto_clean
-	dh_clean
 
- 
 override_dh_install:
 	dh_install
-	dh_install debian/pteid-mw-gui.desktop /usr/share/applications/
+	dh_install debian/pteid-mw-jmc.desktop /usr/share/applications/
 	dh_install debian/pteid-scalable.svg /usr/share/icons/hicolor/scalable/apps/
 	dh_install debian/pteid-signature.png /usr/share/pixmaps
 	dh_install jar/pteidlibj.jar /usr/local/lib/pteid_jni/

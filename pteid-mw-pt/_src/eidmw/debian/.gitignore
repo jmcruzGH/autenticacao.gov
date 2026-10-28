@@ -1,0 +1,8 @@
+# debhelper build leftovers
+.debhelper/
+debhelper-build-stamp
+files
+*.debhelper.log
+*.substvars
+*.debhelper
+/pteid-mw-jmc/

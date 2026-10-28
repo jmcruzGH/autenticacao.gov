@@ -1,3 +1,20 @@
+pteid-mw-jmc (3.16.0+jmc1) noble; urgency=medium
+
+  * Unofficial build of upstream Autenticação.gov 3.16.0 (build 6198,
+    commit de4f01d) for Ubuntu 24.04.
+  * Rename source and binary package to pteid-mw-jmc; mark the package
+    and the desktop entry as unofficial.
+  * debian/rules: force the qmake build system (the top-level
+    CMakeLists.txt made debhelper pick CMake, which fails).
+  * debian/control: debhelper compat 13; add libcjson-dev and libeac-dev
+    to Build-Depends; depend on pkexec.
+  * debian/copyright: rewrite in machine-readable format; the code is
+    under the EUPL v1.2, not the GPL as previously stated.
+  * postrm: no longer delete cache files in users' home folders, which
+    the official Flatpak application may also use.
+
+ -- JoseMCruz <jmcruz@fe.up.pt>  Wed, 28 Oct 2026 14:00:00 +0000
+
 pteid-mw (3.8.0+git20220601) UNRELEASED; urgency=medium
 
   * Chave Movel Digital signature support in the pteidlib SDK
