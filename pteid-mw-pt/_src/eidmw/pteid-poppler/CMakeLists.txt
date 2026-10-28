@@ -1,11 +1,13 @@
 project(${PTEID_PREFIX}-poppler VERSION 1.0 LANGUAGES CXX)
 
 find_package(ZLIB REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 include_directories(../common)
 include_directories(../pteid-poppler)
 include_directories(goo)
 include_directories(../_Builds)
+include_directories(${OPENSSL_INCLUDE_DIR})
 
 set(sources poppler/Array.cc poppler/Annot.cc poppler/CachedFile.cc poppler/Catalog.cc
 	poppler/DateInfo.cc poppler/Decrypt.cc poppler/Dict.cc poppler/Error.cc poppler/FileSpec.cc poppler/Form.cc
@@ -21,5 +23,5 @@ set(sources poppler/Array.cc poppler/Annot.cc poppler/CachedFile.cc poppler/Cata
 
 add_library(${PROJECT_NAME} SHARED ${sources})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB ${PTEID_COMMON})
+target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB ${OPENSSL_CRYPTO_LIBRARY} ${PTEID_COMMON})
 

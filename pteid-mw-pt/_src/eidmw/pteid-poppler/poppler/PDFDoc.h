@@ -394,6 +394,11 @@ private:
   //Insert a
 
   GBool signature_mode;
+  // Random salt for the deterministic IVs used when writing encrypted
+  // objects: the signature process writes the document several times and
+  // all the writes must produce the same bytes (see PDFDoc.cc)
+  unsigned char m_write_iv_salt[16];
+  GBool m_write_iv_salt_set;
   BaseStream *str;
   void *guiData;
   int pdfMajorVersion;

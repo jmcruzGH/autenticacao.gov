@@ -12,6 +12,9 @@ CONFIG -= qt
 DESTDIR = ./../lib
 
 INCLUDEPATH += ../_Builds/ ../common/ ./poppler ./goo ./fofi
+# OpenSSL is used to encrypt objects written to encrypted PDFs (PDFDoc.cc)
+# and for the AES-256 revision 6 key derivation (Decrypt.cc)
+macx: INCLUDEPATH += $$DEPS_DIR/openssl-3/include
 
 QMAKE_APPLE_DEVICE_ARCHS="x86_64 arm64"
 

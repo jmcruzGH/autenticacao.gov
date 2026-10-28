@@ -85,6 +85,153 @@
 #include "Parser.h"
 #include "SecurityHandler.h"
 #include "Decrypt.h"
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <vector>
+
+//------------------------------------------------------------------------
+// Encryption of incremental updates
+//
+// Signing an encrypted PDF appends new objects (signature dictionary, seal
+// appearance, fonts, image, DSS) and rewrites a few existing ones (page,
+// AcroForm, catalog). In an encrypted file every string and stream of those
+// objects must be encrypted with the object's key (ISO 32000-1 7.6.2),
+// except:
+//   - the /Contents of a signature or timestamp dictionary (7.6.1); this
+//     code only ever writes those as hex strings, and no other object is
+//     written as a hex string, so hex strings are never encrypted;
+//   - the trailer and cross-reference streams (written outside this scope).
+//
+// The signature process writes the document three times (to find the
+// offsets, to hash the bytes and to produce the final file), and all three
+// must be identical except for /Contents. AES therefore uses an IV derived
+// from a random per-document salt, the object number and the plaintext,
+// instead of a fresh random IV per write.
+//------------------------------------------------------------------------
+namespace {
+
+struct WriteEncryption {
+  CryptAlgorithm alg;
+  Guchar key[32];
+  int keyLength;
+  int objNum, objGen;
+  const Guchar *ivSalt; // 16 bytes
+};
+
+thread_local WriteEncryption *g_writeEncryption = NULL;
+
+// Same object key derivation as DecryptStream (Decrypt.cc)
+void makeObjectKey(XRef *xref, int objNum, int objGen, WriteEncryption *we) {
+  int keyLength = xref->getKeyLength();
+  const Guchar *fileKey = xref->getFileKey();
+  Guchar buf[32 + 9];
+
+  we->alg = xref->getEncAlgorithm();
+  we->objNum = objNum;
+  we->objGen = objGen;
+  if (we->alg == cryptAES256) {
+    memcpy(we->key, fileKey, 32);
+    we->keyLength = 32;
+    return;
+  }
+  memcpy(buf, fileKey, keyLength);
+  buf[keyLength] = objNum & 0xff;
+  buf[keyLength + 1] = (objNum >> 8) & 0xff;
+  buf[keyLength + 2] = (objNum >> 16) & 0xff;
+  buf[keyLength + 3] = objGen & 0xff;
+  buf[keyLength + 4] = (objGen >> 8) & 0xff;
+  int n = keyLength + 5;
+  if (we->alg == cryptAES) {
+    buf[n++] = 0x73; // 's'
+    buf[n++] = 0x41; // 'A'
+    buf[n++] = 0x6c; // 'l'
+    buf[n++] = 0x54; // 'T'
+  }
+  md5(buf, n, we->key);
+  we->keyLength = keyLength + 5 > 16 ? 16 : keyLength + 5;
+}
+
+void rc4Crypt(const Guchar *key, int keyLen, const Guchar *in, int len,
+              std::vector<Guchar> &out) {
+  Guchar st[256];
+  for (int i = 0; i < 256; ++i)
+    st[i] = i;
+  for (int i = 0, j = 0; i < 256; ++i) {
+    j = (j + st[i] + key[i % keyLen]) & 0xff;
+    Guchar t = st[i]; st[i] = st[j]; st[j] = t;
+  }
+  out.resize(len);
+  for (int k = 0, i = 0, j = 0; k < len; ++k) {
+    i = (i + 1) & 0xff;
+    j = (j + st[i]) & 0xff;
+    Guchar t = st[i]; st[i] = st[j]; st[j] = t;
+    out[k] = in[k] ^ st[(st[i] + st[j]) & 0xff];
+  }
+}
+
+// Encrypt <len> bytes with the current object's key. Returns false (and
+// leaves <out> empty) on a crypto library failure.
+bool encryptForWrite(const Guchar *in, int len, std::vector<Guchar> &out) {
+  WriteEncryption *we = g_writeEncryption;
+  out.clear();
+  if (we->alg == cryptRC4) {
+    rc4Crypt(we->key, we->keyLength, in, len, out);
+    return true;
+  }
+
+  // IV = first 16 bytes of SHA-256(salt || objNum || objGen || plaintext)
+  Guchar iv[EVP_MAX_MD_SIZE];
+  unsigned int ivLen = 0;
+  Guchar ids[5] = {(Guchar)(we->objNum & 0xff), (Guchar)((we->objNum >> 8) & 0xff),
+                   (Guchar)((we->objNum >> 16) & 0xff), (Guchar)(we->objGen & 0xff),
+                   (Guchar)((we->objGen >> 8) & 0xff)};
+  EVP_MD_CTX *md = EVP_MD_CTX_new();
+  bool ok = md && EVP_DigestInit_ex(md, EVP_sha256(), NULL) &&
+            EVP_DigestUpdate(md, we->ivSalt, 16) &&
+            EVP_DigestUpdate(md, ids, sizeof(ids)) &&
+            (len == 0 || EVP_DigestUpdate(md, in, len)) &&
+            EVP_DigestFinal_ex(md, iv, &ivLen);
+  if (md)
+    EVP_MD_CTX_free(md);
+  if (!ok)
+    return false;
+
+  // Output: IV || AES-CBC(plaintext with PKCS#5 padding)
+  EVP_CIPHER_CTX *c = EVP_CIPHER_CTX_new();
+  out.resize(16 + len + 16);
+  memcpy(out.data(), iv, 16);
+  int l1 = 0, l2 = 0;
+  ok = c && EVP_EncryptInit_ex(c, we->alg == cryptAES256 ? EVP_aes_256_cbc() : EVP_aes_128_cbc(),
+                               NULL, we->key, iv) &&
+       EVP_EncryptUpdate(c, out.data() + 16, &l1, in, len) &&
+       EVP_EncryptFinal_ex(c, out.data() + 16 + l1, &l2);
+  if (c)
+    EVP_CIPHER_CTX_free(c);
+  if (!ok) {
+    out.clear();
+    return false;
+  }
+  out.resize(16 + l1 + l2);
+  return true;
+}
+
+// Encryption is active for the indirect object being written while an
+// instance of this class exists.
+class WriteEncryptionScope {
+public:
+  WriteEncryptionScope(XRef *xref, const Ref &ref, const Guchar *ivSalt) {
+    if (xref->isEncrypted()) {
+      makeObjectKey(xref, ref.num, ref.gen, &we);
+      we.ivSalt = ivSalt;
+      g_writeEncryption = &we;
+    }
+  }
+  ~WriteEncryptionScope() { g_writeEncryption = NULL; }
+private:
+  WriteEncryption we;
+};
+
+} // namespace
 #ifndef DISABLE_OUTLINE
 #include "Outline.h"
 #endif
@@ -134,6 +281,7 @@ void PDFDoc::init()
   secHdlr = NULL;
   pageCache = NULL;
   signature_mode = gFalse;
+  m_write_iv_salt_set = gFalse;
   m_image_data_jpeg = NULL;
   m_attribute_supplier = NULL;
   m_attribute_name = NULL;
@@ -1330,17 +1478,20 @@ int PDFDoc::saveAs(OutStream *outStr, PDFWriteMode mode) {
     }
   }
 
-  // we don't support rewriting files with Encrypt at the moment
+  // Files with Encrypt can't be completely rewritten, but incremental
+  // updates are supported: saveIncrementalUpdate() encrypts what it writes
   Object obj;
   xref->getTrailerDict()->getDict()->lookupNF("Encrypt", &obj);
   if (!obj.isNull())
   {
     obj.free();
-    if (!updated && mode == writeStandard) {
+    if (!updated && mode != writeForceIncremental) {
       // simply copy the original file
       saveWithoutChangesAs (outStr);
-    } else {
+    } else if (mode == writeForceRewrite || !xref->isEncrypted()) {
       return errEncrypted;
+    } else {
+      saveIncrementalUpdate(outStr);
     }
   }
   else
@@ -1399,6 +1550,11 @@ void PDFDoc::saveIncrementalUpdate (OutStream* outStr)
 {
   XRef *uxref;
   int c;
+  if (!m_write_iv_salt_set) {
+    if (RAND_bytes(m_write_iv_salt, sizeof(m_write_iv_salt)) != 1)
+      memset(m_write_iv_salt, 0, sizeof(m_write_iv_salt));
+    m_write_iv_salt_set = gTrue;
+  }
   //copy the original file
   str->reset();
   while ((c = str->getChar()) != EOF) {
@@ -1424,6 +1580,7 @@ void PDFDoc::saveIncrementalUpdate (OutStream* outStr)
       if (xref->getEntry(i)->type != xrefEntryFree) {
         Object obj1;
         xref->fetch(ref.num, ref.gen, &obj1);
+        WriteEncryptionScope encryptScope(xref, ref, m_write_iv_salt);
         Guint offset = writeObject(&obj1, &ref, outStr);
         uxref->add(ref.num, ref.gen, offset, gTrue);
         obj1.free();
@@ -1611,6 +1768,19 @@ void PDFDoc::writeRawStream (Stream* str, OutStream* outStr)
 
 void PDFDoc::writeString (GooString* s, OutStream* outStr)
 {
+	// In an encrypted update, write literal strings encrypted, as hex strings.
+	// Hex strings are only used for signature /Contents, which stay in clear.
+	if (g_writeEncryption && !s->isHexString()) {
+		std::vector<Guchar> enc;
+		if (encryptForWrite((const Guchar *)s->getCString(), s->getLength(), enc)) {
+			outStr->printf("<");
+			for (size_t i = 0; i < enc.size(); i++)
+				outStr->printf("%02X", enc[i]);
+			outStr->printf("> ");
+			return;
+		}
+		error(errInternal, -1, "writeString: encryption failed");
+	}
 
 	//Support for PDF hexstrings
 	const char * begin_char = s->isHexString() ? "<" : "(";
@@ -1703,7 +1873,25 @@ Guint PDFDoc::writeObject (Object* obj, Ref* ref, OutStream* outStr, XRef *xRef,
         //We can't modify stream with the current implementation (no write functions in Stream API)
         // => the only type of streams which that have been modified are internal streams (=strWeird)
         Stream *stream = obj->getStream();
-        if (stream->getKind() == strWeird) {
+        if (stream->getKind() == strWeird && g_writeEncryption) {
+          // Encrypted update: encrypt the stream data (already encoded by
+          // its creator, e.g. FlateDecode) with the object's key
+          std::vector<Guchar> plain, enc;
+          stream->reset();
+          for (int c=stream->getChar(); c!=EOF; c=stream->getChar())
+            plain.push_back((Guchar)c);
+          if (!encryptForWrite(plain.data(), (int)plain.size(), enc))
+            error(errInternal, -1, "writeObject: stream encryption failed");
+          obj1.initInt((int)enc.size());
+          stream->getDict()->set("Length", &obj1);
+          writeDictionnary (stream->getDict(), outStr, xRef, numOffset);
+          outStr->printf("stream\r\n");
+          for (size_t k = 0; k < enc.size(); k++)
+            outStr->put((char)enc[k]);
+          outStr->printf("\r\nendstream\r\n");
+          obj1.free();
+        }
+        else if (stream->getKind() == strWeird) {
           //we write the stream unencoded => TODO: write stream encoder
           stream->reset();
           //recalculate stream length
@@ -1834,7 +2022,16 @@ Dict *PDFDoc::createTrailerDict(int uxrefSize, GBool incrUpdate, Guint startxRef
 
   Object obj4;
   xRef->getTrailerDict()->getDict()->lookup("ID", &obj4);
-  if (is_signature_mode)
+  // The first ID string of an encrypted file is part of its key derivation
+  // (and the Encrypt dictionary must be referenced again by the new trailer)
+  GBool keepEncryption = incrUpdate && xRef->isEncrypted();
+  if (keepEncryption) {
+    Object encObj;
+    xRef->getTrailerDict()->getDict()->lookupNF("Encrypt", &encObj);
+    if (!encObj.isNull())
+      trailerDict->set("Encrypt", &encObj);
+  }
+  if (is_signature_mode || (keepEncryption && obj4.isArray()))
   {
 	  if (!obj4.isArray()) {
 		  error(errSyntaxWarning, -1, "PDFDoc::createTrailerDict original file's ID entry isn't an array. Trying to continue");

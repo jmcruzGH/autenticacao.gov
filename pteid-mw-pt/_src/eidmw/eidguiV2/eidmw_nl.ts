@@ -1898,7 +1898,7 @@
     </message>
     <message>
         <source>STR_LOAD_ENCRYPTED_PDF_ERROR_MSG2</source>
-        <translation>” não é suportado ou está encriptado. A assinatura PDF não suporta ficheiros PDF encriptados.</translation>
+        <translation>” está protegido: só abre com palavra-passe, ou o autor do documento não permite que lhe sejam adicionadas assinaturas.</translation>
     </message>
     <message>
         <source>STR_FILE_UPLOAD_FAIL</source>
